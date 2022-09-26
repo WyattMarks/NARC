@@ -115,7 +115,7 @@ class Client:
 	## The the current channel's nick name
 	def set_motd(self, msg):
 		if msg == "/motd":
-			self.socket.send("You must give a MOTD to set")
+			self.socket.send("You must give a MOTD to set\r\n".encode())
 			return
 		
 		if self.channel is None:
