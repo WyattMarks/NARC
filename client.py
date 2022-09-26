@@ -30,25 +30,41 @@ class Client:
 	def print_responses(self):
 		import sys
 		while True:
-			response = self.socket.recv(4200)
+			try:
+				response = self.socket.recv(4200)
 
-			if response.decode().startswith(f"{self.nick} is now known as ") or response.decode().startswith("Welcome back, "):
-				self.nick = response.decode().strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
-				self.nick = self.nick[0:len(self.nick)-1]
+				if response.decode().startswith(f"{self.nick} is now known as ") or response.decode().startswith("Welcome back, "):
+					self.nick = response.decode().strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
+					self.nick = self.nick[0:len(self.nick)-1]
 
-			if not response.decode().strip().startswith(f"<{self.nick}> "):
-				if response.decode().startswith("-----BEGIN PUBLIC KEY-----"):
-					self.encryptor = PKCS1_OAEP.new(RSA.importKey(response))
-					self.waiting_for_password = True
-					sys.stdout.write('\033[2K\033[1G')
-					print("Password: ", end="")
-					sys.stdout.flush()
-				else:
-					sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
-					print(response.decode().strip())
-					print(f"<{self.nick}> ", end="") #put the <user> back so it looks right
-					sys.stdout.flush() #flush stdout so that <user> actually appears
-				
+				if not response.decode().strip().startswith(f"<{self.nick}> "):
+					if response.decode().startswith("-----BEGIN PUBLIC KEY-----"):
+						self.encryptor = PKCS1_OAEP.new(RSA.importKey(response))
+						self.waiting_for_password = True
+						sys.stdout.write('\033[2K\033[1G')
+						print("Password: ", end="")
+						sys.stdout.flush()
+					else:
+						sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
+						print(response.decode().strip())
+						print(f"<{self.nick}> ", end="") #put the <user> back so it looks right
+						sys.stdout.flush() #flush stdout so that <user> actually appears
+			except socket.error:
+				sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
+				print("Connection lost, attempting to reconnect..")
+				connected = False
+				while not connected:
+					try: 
+						self.connect()
+						connected = True
+					except socket.error:
+						print("Failed again, retrying in 5 seconds..")
+						from time import sleep
+						sleep(5)
+				print("Connected!")
+				self.nick = "Anonymous"
+				print(f"<{self.nick}> ", end="") 
+				sys.stdout.flush()
 
 	def handle_input(self):
 		while True:
