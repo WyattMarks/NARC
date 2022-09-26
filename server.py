@@ -116,23 +116,23 @@ class Client:
 	## The the current channel's nick name
 	def set_motd(self, msg):
 		if msg == "/motd":
-			self.socket.send("You must give a MOTD to set\r\n".encode())
+			self.socket.send((self.server.get_motd(self.channel) + "\r\n").encode())
 			return
 		
 		if self.channel is None:
-			self.socket.send("You must be a channel to set a channel's MOTD..\r\n".encode())
+			self.socket.send("You must be a channel to see a channel's MOTD..\r\n".encode())
 			return
 
 		if not self.server.is_channel_claimed(self.channel):
-			self.socket.send("This channel is not claimed. Claim it with /claim\r\n".encode())
+			self.socket.send("This channel is not claimed, and therefore has no MOTD. Claim it with /claim!\r\n".encode())
 			return
 
 		if not self.authed:
-			self.socket.send("You must be logged in as the owner of this channel. /auth <nick>\r\n".encode())
+			self.socket.send((self.server.get_motd(self.channel) + "\r\n").encode())
 			return
 
 		if self.nick != self.server.get_channel_owner(self.channel):
-			self.socket.send("You are not the owner of this channel!\r\n".encode())
+			self.socket.send((self.server.get_motd(self.channel) + "\r\n").encode())
 			return
 		
 		self.server.set_motd(self, msg)
@@ -196,6 +196,7 @@ class Client:
 		if self.server.auth(msg, self.server.decryptor.decrypt(self.socket.recv(4096).strip()) + self.server.get_salt(msg).encode()):
 			self.nick = msg
 			self.socket.send(f"Welcome back, {self.nick}!\r\n".encode())
+			self.server.broadcast(self.channel, f"{self.nick} has logged in\r\n", exclude=[self])
 			self.authed = True
 		else:
 			self.socket.send("Sorry, that is not the correct password.\r\n".encode())
@@ -314,9 +315,9 @@ class Server:
 				c.socket.send(f"<{client.nick}> {msg}\r\n".encode())
 
 
-	def broadcast(self, channel, message):
+	def broadcast(self, channel, message, exclude=[]):
 		for c in self.clients:
-			if c.channel == channel:
+			if c not in exclude and c.channel == channel:
 				c.socket.send((message + "\r\n").encode())
 				
 	## Broadcast the arrival of someone
@@ -359,6 +360,10 @@ class Server:
 	def set_motd(self, client, motd): 
 		self.channels[client.channel] = (client.nick, motd)
 		self.save_channels()
+
+	def get_motd(self, channel):
+		owner, motd = self.channels[channel]
+		return motd
 
 	## Remove a client
 	def disconnect(self, client):
