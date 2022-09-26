@@ -105,8 +105,8 @@ class Client:
 
 			if self.server.nick_available(msg):
 				self.authed = False
+				self.server.broadcast(self.channel, f"{self.nick} is now known as {msg}!")
 				self.nick = msg
-				self.socket.send(f"Hello there, {msg}!\r\n".encode())
 			else:
 				self.socket.send(f"Sorry, {msg} is already in use.\r\n".encode())
 		else:
@@ -183,10 +183,10 @@ class Client:
 			self.socket.send("You are already logged in..\r\n".encode())
 			return
 
-		self.nick = msg
 
 		self.socket.send(self.server.rsaKey.publickey().exportKey())
-		if self.server.auth(self, sha256(self.server.decryptor.decrypt(self.socket.recv(4096).strip())).hexdigest()):
+		if self.server.auth(msg, sha256(self.server.decryptor.decrypt(self.socket.recv(4096).strip())).hexdigest()):
+			self.nick = msg
 			self.socket.send(f"Welcome back, {self.nick}!\r\n".encode())
 			self.authed = True
 		else:
@@ -303,6 +303,12 @@ class Server:
 			if (c.channel == client.channel): #Broadcast to everyone inside this channel
 				c.socket.send(f"<{client.nick}> {msg}\r\n".encode())
 
+
+	def broadcast(self, channel, message):
+		for c in self.clients:
+			if c.channel == channel:
+				c.socket.send((message + "\r\n").encode())
+				
 	## Broadcast the arrival of someone
 	def arrival(self, client, channel):
 		if channel is None:
@@ -376,8 +382,8 @@ class Server:
 		self.save_passwords()
 		client.socket.send(f"Congratulations, {client.nick} is now registered to you.\r\n".encode())
 
-	def auth(self, client, password):
-		return client.nick in self.passwords and self.passwords[client.nick] == password
+	def auth(self, nick, password):
+		return nick in self.passwords and self.passwords[nick] == password
 
 
 

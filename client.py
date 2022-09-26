@@ -32,8 +32,8 @@ class Client:
 		while True:
 			response = self.socket.recv(4200)
 
-			if response.decode().startswith("Hello there, ") or response.decode().startswith("Welcome back, "):
-				self.nick = response.decode().strip().replace("Hello there, ", "").replace("Welcome back, ", "")
+			if response.decode().startswith(f"{self.nick} is now known as ") or response.decode().startswith("Welcome back, "):
+				self.nick = response.decode().strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
 				self.nick = self.nick[0:len(self.nick)-1]
 
 			if not response.decode().strip().startswith(f"<{self.nick}> "):
