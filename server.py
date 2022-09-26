@@ -32,6 +32,7 @@ class Client:
 
 		self.commands = { ## Command dictionary makes parsing input much easier
 			"/join": self.join_channel,
+			"/channels": self.list_channels,
 			"/chat": self.send_chat,
 			"/nick": self.set_nick,
 			"/auth": self.auth,
@@ -160,6 +161,13 @@ class Client:
 
 		else:
 			self.socket.send("Join a channel to see who's online in that channel\r\n".encode())
+
+	def list_channels(self, msg):
+		message = f"There are currently {len(self.server.channels)} registered channels\r\n"
+		for c in self.server.channels:
+			message += f"\t{c}\r\n"
+		self.socket.send(message.encode())
+
 
 	## List the command dictionary
 	def help(self, msg):
