@@ -1,11 +1,9 @@
 ## Super simple relay chat protocol.
 #  This is the server implmentation. 
 #  NARC - Not Another Relay Chat 
-#  TODO: If an account is authed it will be able to "claim" a channel - and then will be the only account able to set MOTD
-#            Eventually add ban / kick options as well
+
 
 import socket
-from symbol import except_clause
 import threading
 import json
 
@@ -115,11 +113,30 @@ class Client:
 
 	## The the current channel's nick name
 	def set_motd(self, msg):
-		if self.channel != None:
-			self.server.set_motd(self.channel, msg)
-			self.socket.send(f"MOTD set for {self.channel}\r\n".encode())
-		else:
-			self.socket.send("You must be a channel to set a channel's MOTD..\r\n")
+		if msg == "/motd":
+			self.socket.send("You must give a MOTD to set")
+			return
+		
+		if self.channel is None:
+			self.socket.send("You must be a channel to set a channel's MOTD..\r\n".encode())
+			return
+
+		if not self.server.is_channel_claimed(self.channel):
+			self.socket.send("This channel is not claimed. Claim it with /claim\r\n".encode())
+			return
+
+		if not self.authed:
+			self.socket.send("You must be logged in as the owner of this channel. /auth <nick>\r\n".encode())
+			return
+
+		if self.nick != self.server.get_channel_owner(self.channel):
+			self.socket.send("You are not the owner of this channel!\r\n".encode())
+			return
+		
+		self.server.set_motd(self, msg)
+		self.socket.send("Channel MOTD set.\r\n".encode())
+
+			
 
 	## Ping
 	def pong(self, msg):
@@ -191,7 +208,18 @@ class Client:
 		self.authed = True
 
 	def claim(self, msg):
-		pass
+		if not self.authed:
+			self.socket.send("You must be registered to claim a channel\r\n".encode())
+			return
+
+		if self.channel is None:
+			self.socket.send("You must be in a channel to claim it\r\n".encode())
+
+		self.server.claim_channel(self.nick, self.channel)
+		self.socket.send(f"{self.channel} is now registered to you, {self.nick}\r\n".encode())
+
+		
+
 			
 
 ## The actual server object
@@ -205,9 +233,7 @@ class Server:
 
 		self.clients = [] #Empty list for clients
 		self.passwords = {} #Empty dictionary for nick / password combos
-		self.channel_motds = {
-			None: "Welcome to NARC Server 0.0.1!"
-		} #Dictionary for channel MOTDs. None is the Server's MOTD
+		self.channels = {}
 
 		randomGenerator = Random.new().read
 		self.rsaKey = RSA.generate(1024, randomGenerator)
@@ -225,6 +251,22 @@ class Server:
 		try:
 			f = open("auth.json", "w")
 			f.write(json.dumps(self.passwords))
+			f.close()
+		except Exception as e:
+			print(f"Error writing auth.json.. {e}")
+
+	def load_channels(self):
+		try:
+			f = open("channels.json", "r")
+			self.channels = json.load(f)
+			f.close()
+		except Exception as e:
+			self.save_passwords()
+
+	def save_channels(self):
+		try:
+			f = open("channels.json", "w")
+			f.write(json.dumps(self.channels))
 			f.close()
 		except Exception as e:
 			print(f"Error writing auth.json.. {e}")
@@ -260,9 +302,12 @@ class Server:
 
 	## Broadcast the arrival of someone
 	def arrival(self, client, channel):
-		if channel in self.channel_motds: #If there is a MOTD currently set, send it
-			prefix = f"{channel}: " if channel is not None else ""
-			client.socket.send(f"{prefix}{self.channel_motds[channel]}\r\n".encode())
+		if channel is None:
+			client.socket.send("Welcome to NARC Server 0.0.2!\r\n".encode())
+
+		if channel is not None and channel in self.channels: #If there is a MOTD currently set, send it
+			owner, motd = self.channels[channel]
+			client.socket.send(f"{motd}\r\n".encode())
 
 		for c in self.clients:
 			if (c.channel != None and c.channel == channel): # Tell everyone that someone new connected
@@ -274,9 +319,27 @@ class Server:
 			if (c.channel != None and c.channel == client.channel and c != client): # Tell everyone that someone left
 				c.socket.send(f"{client.nick} has left {client.channel}..\r\n".encode())
 	
+	
+	def is_channel_claimed(self, channel):
+		for c in self.channels:
+			if channel == c:
+				return True
+
+		return False
+
+	def get_channel_owner(self, channel):
+		owner, motd = self.channels[channel]
+		return owner
+
+	def claim_channel(self, nick, channel):
+		self.channels[channel] = (nick, f"Welcome to {channel}")
+		self.save_channels()
+
+
 	## Set a channel's MOTD
-	def set_motd(self, channel, motd): 
-		self.channel_motds[channel] = motd
+	def set_motd(self, client, motd): 
+		self.channels[client.channel] = (client.nick, motd)
+		self.save_channels()
 
 	## Remove a client
 	def disconnect(self, client):

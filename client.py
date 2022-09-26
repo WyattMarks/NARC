@@ -77,7 +77,7 @@ if __name__ == "__main__":
 	server = "127.0.0.1"
 	if len(sys.argv) != 2:
 		print('You must give a server address as the only argument')
-		#exit(0) #comment out for local testing
+		exit(0) #comment out for local testing
 	else:
 		server = sys.argv[1]
 
