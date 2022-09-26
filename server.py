@@ -274,7 +274,7 @@ class Server:
 			self.channels = json.load(f)
 			f.close()
 		except Exception as e:
-			self.save_passwords()
+			self.save_channels()
 
 	def save_channels(self):
 		try:
@@ -282,7 +282,7 @@ class Server:
 			f.write(json.dumps(self.channels))
 			f.close()
 		except Exception as e:
-			print(f"Error writing auth.json.. {e}")
+			print(f"Error writing channels.json.. {e}")
 		
 	## Function to create client object and begin the infinite loop call
 	def handle_client(self, client_socket, address):
@@ -399,7 +399,11 @@ class Server:
 
 	def auth(self, nick, password):
 		(hash, salt) = self.passwords[nick]
-		return self.hasher.verify(hash, password)
+		try:
+			self.hasher.verify(hash, password)
+			return True
+		except:
+			return False
 
 
 
