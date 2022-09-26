@@ -10,6 +10,7 @@ import json
 from hashlib import sha256
 from Crypto.PublicKey import RSA
 from Crypto import Random
+from Crypto.Cipher import PKCS1_OAEP
 
 host = ""
 port = 0xBEEF #48879
@@ -185,7 +186,7 @@ class Client:
 		self.nick = msg
 
 		self.socket.send(self.server.rsaKey.publickey().exportKey())
-		if self.server.auth(self, sha256(self.server.rsaKey.decrypt(self.socket.recv(4096).strip())).hexdigest()):
+		if self.server.auth(self, sha256(self.server.decryptor.decrypt(self.socket.recv(4096).strip())).hexdigest()):
 			self.socket.send(f"Welcome back, {self.nick}!\r\n".encode())
 			self.authed = True
 		else:
@@ -204,7 +205,7 @@ class Client:
 
 
 		self.socket.send(self.server.rsaKey.publickey().exportKey())
-		self.server.register(self, sha256(self.server.rsaKey.decrypt(self.socket.recv(4096).strip())).hexdigest())
+		self.server.register(self, sha256(self.server.decryptor.decrypt(self.socket.recv(4096).strip())).hexdigest())
 		self.authed = True
 
 	def claim(self, msg):
@@ -237,6 +238,7 @@ class Server:
 
 		randomGenerator = Random.new().read
 		self.rsaKey = RSA.generate(1024, randomGenerator)
+		self.decryptor = PKCS1_OAEP.new(self.rsaKey)
 		self.load_passwords()
 		self.load_channels()
 

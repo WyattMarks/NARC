@@ -7,6 +7,7 @@ import socket
 import threading
 
 from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 import random
 
 ## Client object for the client side
@@ -37,7 +38,7 @@ class Client:
 
 			if not response.decode().strip().startswith(f"<{self.nick}> "):
 				if response.decode().startswith("-----BEGIN PUBLIC KEY-----"):
-					self.encryptor = RSA.importKey(response)
+					self.encryptor = PKCS1_OAEP.new(RSA.importKey(response))
 					self.waiting_for_password = True
 					sys.stdout.write('\033[2K\033[1G')
 					print("Password: ", end="")
@@ -55,7 +56,7 @@ class Client:
 				message = input(f"<{self.nick}> ")
 				if len(message) > 0:
 					if self.waiting_for_password:
-						password = self.encryptor.encrypt(message.encode(), random.randint(1, 40))[0]
+						password = self.encryptor.encrypt(message.encode())
 						self.socket.send(password)
 						self.waiting_for_password = False
 					elif message.startswith("/"): #If it starts with / then it is a command, and we should not prepend /chat
