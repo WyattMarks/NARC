@@ -31,8 +31,9 @@ class Client:
 		while True:
 			response = self.socket.recv(4200)
 
-			if response.decode().strip() == f"Sorry, {self.nick} is already in use.":
-				self.nick = self.old_nick
+			if response.decode().startswith("Hello there, ") or response.decode().startswith("Welcome back, "):
+				self.nick = response.decode().strip().replace("Hello there, ", "").replace("Welcome back, ", "")
+				self.nick = self.nick[0:len(self.nick)-1]
 
 			if not response.decode().strip().startswith(f"<{self.nick}> "):
 				if response.decode().startswith("-----BEGIN PUBLIC KEY-----"):
@@ -58,10 +59,6 @@ class Client:
 						self.socket.send(password)
 						self.waiting_for_password = False
 					elif message.startswith("/"): #If it starts with / then it is a command, and we should not prepend /chat
-						if message.startswith("/nick "): #Detect when we run /nick, so that we can ID the new nick and save it
-							self.old_nick = self.nick
-							self.nick = message.replace("/nick ", "").strip()
-
 						if message.startswith("/quit") or message.startswith("/exit"):
 							raise KeyboardInterrupt #hacky way of making it exit, lol
 

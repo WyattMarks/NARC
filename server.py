@@ -36,6 +36,7 @@ class Client:
 			"/chat": self.send_chat,
 			"/nick": self.set_nick,
 			"/auth": self.auth,
+			"/login": self.auth,
 			"/register": self.register,
 			"/motd": self.set_motd,
 			"/ping": self.pong,
@@ -99,7 +100,12 @@ class Client:
 	## Set the client's nick name
 	def set_nick(self, msg):
 		if msg != "/nick":
+			if self.server.is_nick_registered(msg):
+				self.socket.send(f"Sorry, {msg} is registered. If this is your nick, use /auth <nick> to login\r\n".encode())
+				return
+
 			if self.server.nick_available(msg):
+				self.authed = False
 				self.nick = msg
 				self.socket.send(f"Hello there, {msg}!\r\n".encode())
 			else:
@@ -147,17 +153,19 @@ class Client:
 
 	## Login with password
 	def auth(self, msg):
-		if not self.server.is_nick_registered(self.nick):
+		if msg == "/auth":
+			self.socket.send("You must provide a nickname to login to\r\n".encode())
+			return
+
+		if not self.server.is_nick_registered(msg):
 			self.socket.send("This nickname is not registered\r\n".encode())
 			return
 
 		if self.authed:
-			self.socket.send("You are already authorized..\r\n".encode())
+			self.socket.send("You are already logged in..\r\n".encode())
 			return
 
-		if self.nick == "Anonymous":
-			self.socket.send("You must first select a nick name (/nick)\r\n".encode())
-			return
+		self.nick = msg
 
 		self.socket.send(self.server.rsaKey.publickey().exportKey())
 		if self.server.auth(self, sha256(self.server.rsaKey.decrypt(self.socket.recv(4096).strip())).hexdigest()):
