@@ -238,6 +238,7 @@ class Server:
 		randomGenerator = Random.new().read
 		self.rsaKey = RSA.generate(1024, randomGenerator)
 		self.load_passwords()
+		self.load_channels()
 
 	def load_passwords(self):
 		try:
