@@ -7,7 +7,7 @@ import socket
 import threading
 import json
 
-from hashlib import sha256
+from argon2 import PasswordHasher
 from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP
@@ -185,7 +185,7 @@ class Client:
 
 
 		self.socket.send(self.server.rsaKey.publickey().exportKey())
-		if self.server.auth(msg, sha256(self.server.decryptor.decrypt(self.socket.recv(4096).strip())).hexdigest()):
+		if self.server.auth(msg, self.server.decryptor.decrypt(self.socket.recv(4096).strip()) + self.server.get_salt(msg).encode()):
 			self.nick = msg
 			self.socket.send(f"Welcome back, {self.nick}!\r\n".encode())
 			self.authed = True
@@ -205,7 +205,8 @@ class Client:
 
 
 		self.socket.send(self.server.rsaKey.publickey().exportKey())
-		self.server.register(self, sha256(self.server.decryptor.decrypt(self.socket.recv(4096).strip())).hexdigest())
+		salt = self.server.hasher.hash(Random.new().read(32))
+		self.server.register(self, self.server.hasher.hash(self.server.decryptor.decrypt(self.socket.recv(4096).strip()) + salt.encode()), salt)
 		self.authed = True
 
 	def claim(self, msg):
@@ -239,6 +240,7 @@ class Server:
 		randomGenerator = Random.new().read
 		self.rsaKey = RSA.generate(1024, randomGenerator)
 		self.decryptor = PKCS1_OAEP.new(self.rsaKey)
+		self.hasher = PasswordHasher()
 		self.load_passwords()
 		self.load_channels()
 
@@ -376,14 +378,20 @@ class Server:
 	def is_nick_registered(self, nick):
 		return nick in self.passwords
 
-	def register(self, client, password):
+	def get_salt(self, nick):
+		(password, salt) = self.passwords[nick]
+		return salt
+
+	def register(self, client, password, salt):
 		print(f"{client.nick} has now been registered")
-		self.passwords[client.nick] = password
+		
+		self.passwords[client.nick] = (password, salt)
 		self.save_passwords()
 		client.socket.send(f"Congratulations, {client.nick} is now registered to you.\r\n".encode())
 
 	def auth(self, nick, password):
-		return nick in self.passwords and self.passwords[nick] == password
+		(hash, salt) = self.passwords[nick]
+		return self.hasher.verify(hash, password)
 
 
 
