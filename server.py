@@ -1,13 +1,17 @@
 ## Super simple relay chat protocol.
 #  This is the server implmentation. 
 #  NARC - Not Another Relay Chat 
-#  Currently there is no authentication or permissions
-#  Eventually there should be accounts with passwords associated to nicknames (optional of course)
-#  If an account is authed it will be able to "claim" a channel - and then will be the only account able to set MOTD
+#  TODO: If an account is authed it will be able to "claim" a channel - and then will be the only account able to set MOTD
 #            Eventually add ban / kick options as well
 
 import socket
+from symbol import except_clause
 import threading
+import json
+
+from hashlib import sha256
+from Crypto.PublicKey import RSA
+from Crypto import Random
 
 host = ""
 port = 0xBEEF #48879
@@ -24,18 +28,22 @@ class Client:
 		self.server = server
 
 		self.nick = "Anonymous"
+		self.authed = False
 		self.channel = None
 
 		self.commands = { ## Command dictionary makes parsing input much easier
 			"/join": self.join_channel,
 			"/chat": self.send_chat,
 			"/nick": self.set_nick,
+			"/auth": self.auth,
+			"/register": self.register,
 			"/motd": self.set_motd,
 			"/ping": self.pong,
 			"/quit": self.quit,
 			"/exit": self.quit,
 			"/online": self.online,
 			"/help": self.help,
+			"/claim": self.claim,
 		}
 
 	## Start the connection. Blocks until connection ends
@@ -47,7 +55,7 @@ class Client:
 
 		while self.connected:
 			try:
-				msg = self.socket.recv(1024).decode()
+				msg = self.socket.recv(4096).decode()
 				
 				print(f"{self.nick} ({self.ip})> {msg.strip()}")
 
@@ -66,7 +74,8 @@ class Client:
 				self.server.disconnect(self) #handle disconnection
 				self.connected = False #let the infinite loop stop
 				break
-
+			except Exception as e:
+				print(f"Exception on client {self.nick}({self.ip}): {e}")
 			
 		self.socket.close() #close the socket after the infinite loop ends
 
@@ -136,6 +145,47 @@ class Client:
 
 		self.socket.send(message.encode())
 
+	## Login with password
+	def auth(self, msg):
+		if not self.server.is_nick_registered(self.nick):
+			self.socket.send("This nickname is not registered\r\n".encode())
+			return
+
+		if self.authed:
+			self.socket.send("You are already authorized..\r\n".encode())
+			return
+
+		if self.nick == "Anonymous":
+			self.socket.send("You must first select a nick name (/nick)\r\n".encode())
+			return
+
+		self.socket.send(self.server.rsaKey.publickey().exportKey())
+		if self.server.auth(self, sha256(self.server.rsaKey.decrypt(self.socket.recv(4096).strip())).hexdigest()):
+			self.socket.send(f"Welcome back, {self.nick}!\r\n".encode())
+			self.authed = True
+		else:
+			self.socket.send("Sorry, that is not the correct password.\r\n".encode())
+			
+
+	## Register a nick with a password
+	def register(self, msg):
+		if self.server.is_nick_registered(self.nick):
+			self.socket.send("This nickname is already registered\r\n".encode())
+			return
+
+		if self.nick == "Anonymous":
+			self.socket.send("You must first select a nick name (/nick)\r\n".encode())
+			return
+
+
+		self.socket.send(self.server.rsaKey.publickey().exportKey())
+		self.server.register(self, sha256(self.server.rsaKey.decrypt(self.socket.recv(4096).strip())).hexdigest())
+		self.authed = True
+
+	def claim(self, msg):
+		pass
+			
+
 ## The actual server object
 class Server:
 	## Must be given an IP and port to listen on
@@ -146,9 +196,30 @@ class Server:
 		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #create socket object
 
 		self.clients = [] #Empty list for clients
+		self.passwords = {} #Empty dictionary for nick / password combos
 		self.channel_motds = {
 			None: "Welcome to NARC Server 0.0.1!"
 		} #Dictionary for channel MOTDs. None is the Server's MOTD
+
+		randomGenerator = Random.new().read
+		self.rsaKey = RSA.generate(1024, randomGenerator)
+		self.load_passwords()
+
+	def load_passwords(self):
+		try:
+			f = open("auth.json", "r")
+			self.passwords = json.load(f)
+			f.close()
+		except Exception as e:
+			self.save_passwords()
+
+	def save_passwords(self):
+		try:
+			f = open("auth.json", "w")
+			f.write(json.dumps(self.passwords))
+			f.close()
+		except Exception as e:
+			print(f"Error writing auth.json.. {e}")
 		
 	## Function to create client object and begin the infinite loop call
 	def handle_client(self, client_socket, address):
@@ -169,16 +240,17 @@ class Server:
 			cli_thread.setDaemon(True) #Set to daemon so that the process doesn't wait for clients to disconnect if we stop
 			cli_thread.start() #Call this client's thread
 
-	
+	## Stop the server
 	def stop(self):
 		self.socket.close() #Close the socket when we stop
 
-
+	## Broadcast a chat message from a client
 	def chat(self, client, msg):
 		for c in self.clients:
 			if (c.channel == client.channel): #Broadcast to everyone inside this channel
 				c.socket.send(f"<{client.nick}> {msg}\r\n".encode())
 
+	## Broadcast the arrival of someone
 	def arrival(self, client, channel):
 		if channel in self.channel_motds: #If there is a MOTD currently set, send it
 			prefix = f"{channel}: " if channel is not None else ""
@@ -188,25 +260,31 @@ class Server:
 			if (c.channel != None and c.channel == channel): # Tell everyone that someone new connected
 				c.socket.send(f"Welcome {client.nick} to {channel}!\r\n".encode())
 
+	## Broadcast the departure
 	def departure(self, client):
 		for c in self.clients:
-			if (c.channel != None and c.channel == client.channel and c != client):
+			if (c.channel != None and c.channel == client.channel and c != client): # Tell everyone that someone left
 				c.socket.send(f"{client.nick} has left {client.channel}..\r\n".encode())
-
-	def set_motd(self, channel, motd):
+	
+	## Set a channel's MOTD
+	def set_motd(self, channel, motd): 
 		self.channel_motds[channel] = motd
 
+	## Remove a client
 	def disconnect(self, client):
 		self.departure(client)
 		self.clients.remove(client)
 
+	## Determine the availability of a nickname
 	def nick_available(self, nick):
+		
 		for c in self.clients:
 			if c.nick == nick:
 				return False
 
 		return True
 
+	## Return all clients inside a channel
 	def get_online(self, channel):
 		clients = []
 		for c in self.clients:
@@ -214,6 +292,18 @@ class Server:
 				clients.append(c)
 
 		return clients
+
+	def is_nick_registered(self, nick):
+		return nick in self.passwords
+
+	def register(self, client, password):
+		print(f"{client.nick} has now been registered")
+		self.passwords[client.nick] = password
+		self.save_passwords()
+		client.socket.send(f"Congratulations, {client.nick} is now registered to you.\r\n".encode())
+
+	def auth(self, client, password):
+		return client.nick in self.passwords and self.passwords[client.nick] == password
 
 
 

@@ -6,6 +6,9 @@
 import socket
 import threading
 
+from Crypto.PublicKey import RSA
+import random
+
 ## Client object for the client side
 #  Simply sends the commands you give it to the server
 #  Handles printing and getting input to make it more cohesive than just a telnet session
@@ -16,6 +19,8 @@ class Client:
 		self.ip = ip
 		self.port = port
 
+		self.waiting_for_password = False
+
 	def connect(self):
 		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.socket.connect((self.ip, self.port))
@@ -24,23 +29,35 @@ class Client:
 	def print_responses(self):
 		import sys
 		while True:
-			response = self.socket.recv(1024)
+			response = self.socket.recv(4200)
 
 			if response.decode().strip() == f"Sorry, {self.nick} is already in use.":
 				self.nick = self.old_nick
 
 			if not response.decode().strip().startswith(f"<{self.nick}> "):
-				sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
-				print(response.decode().strip())
-				print(f"<{self.nick}> ", end="") #put the <user> back so it looks right
-				sys.stdout.flush() #flush stdout so that <user> actually appears
+				if response.decode().startswith("-----BEGIN PUBLIC KEY-----"):
+					self.encryptor = RSA.importKey(response)
+					self.waiting_for_password = True
+					sys.stdout.write('\033[2K\033[1G')
+					print("Password: ", end="")
+					sys.stdout.flush()
+				else:
+					sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
+					print(response.decode().strip())
+					print(f"<{self.nick}> ", end="") #put the <user> back so it looks right
+					sys.stdout.flush() #flush stdout so that <user> actually appears
+				
 
 	def handle_input(self):
 		while True:
 			try:
 				message = input(f"<{self.nick}> ")
 				if len(message) > 0:
-					if message.startswith("/"): #If it starts with / then it is a command, and we should not prepend /chat
+					if self.waiting_for_password:
+						password = self.encryptor.encrypt(message.encode(), random.randint(1, 40))[0]
+						self.socket.send(password)
+						self.waiting_for_password = False
+					elif message.startswith("/"): #If it starts with / then it is a command, and we should not prepend /chat
 						if message.startswith("/nick "): #Detect when we run /nick, so that we can ID the new nick and save it
 							self.old_nick = self.nick
 							self.nick = message.replace("/nick ", "").strip()
