@@ -177,7 +177,7 @@ class Client:
 	## End the connection
 	def quit(self, msg):
 		self.send("Goodbye!\r\n".encode())
-		self.server.departure(self)
+		self.server.disconnect(self)
 		self.connected = False
 
 	## List the currently connection clients in this channel
