@@ -93,7 +93,7 @@ class Client:
 						from time import sleep
 						sleep(5)
 				print("Connected!")
-				self.nick = "Anonymous"
+				self.__init__(self.ip, self.port) #reset everything
 				print(f"<{self.nick}> ", end="") 
 				sys.stdout.flush()
 
