@@ -8,8 +8,9 @@ import socket
 import threading
 
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto import Random
+from base64 import b64encode, b64decode
 
 ## Client object for the client side
 #  Simply sends the commands you give it to the server
@@ -28,6 +29,8 @@ class Client:
 		self.decryptor = PKCS1_OAEP.new(self.rsaKey)
 		self.channel = None
 		self.channel_encrypted = False
+
+		self.aes_key = None
 		
 
 	def connect(self):
@@ -40,27 +43,41 @@ class Client:
 		while True:
 			try:
 				response = self.socket.recv(4200)
-				if response[0:10].decode() == "ENCRYPTED:":
-					response = self.decryptor.decrypt(response[10:])
-					self.channel_encrypted = True
 
-				if response.decode().startswith(f"{self.nick} is now known as ") or response.decode().startswith("Welcome back, "):
-					self.nick = response.decode().strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
+				if response == b'':
+					raise socket.error
+
+				if response[0:10].decode() == "CHANNELKEY":
+					self.aes_key = self.decryptor.decrypt(response[10:])
+					self.channel_encrypted = True
+					continue
+
+				if response[0:10].decode() == "ENCRYPTED:":
+					if self.aes_key is not None: #shouldnt happen, but eh
+						response = self.decrypt(response[10:]).decode()
+					else:
+						print("Error, we got an ecrypted message but don't have a aes key to use")
+						self.socket.send(self.rsaKey.publickey().exportKey())
+						continue
+
+				response = response.decode() if type(response) == bytes else response
+
+				if response.startswith(f"{self.nick} is now known as ") or response.startswith("Welcome back, "):
+					self.nick = response.strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
 					self.nick = self.nick[0:len(self.nick)-1]
 
-				if not response.decode().strip().startswith(f"<{self.nick}> "):
-					if response.decode().startswith("-----BEGIN PUBLIC KEY-----"):
+				if not response.strip().startswith(f"<{self.nick}> "):
+					if response.startswith("-----BEGIN PUBLIC KEY-----"):
 						self.encryptor = PKCS1_OAEP.new(RSA.importKey(response))
 						self.waiting_for_password = True
 						sys.stdout.write('\033[2K\033[1G')
 						print("Password: ", end="")
 						sys.stdout.flush()
-					elif response.decode().startswith("PUBKEYREQ"):
+					elif response.startswith("PUBKEYREQ"):
 						self.socket.send(self.rsaKey.publickey().exportKey())
-						self.channel_encrypted = True
 					else:
 						sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
-						print(response.decode().strip())
+						print(response.strip())
 						print(f"<{self.nick}> ", end="") #put the <user> back so it looks right
 						sys.stdout.flush() #flush stdout so that <user> actually appears
 			except socket.error:
@@ -82,9 +99,22 @@ class Client:
 
 	def send(self, message):
 		if self.channel_encrypted:
-			self.socket.send("ENCRYPTED:".encode() + self.encryptor.encrypt(message))
+			self.socket.send("ENCRYPTED:".encode() + self.encrypt(message))
 		else:
 			self.socket.send(message)
+
+	def encrypt(self, message):
+		iv = Random.new().read(16)
+		cipher = AES.new(self.aes_key, mode=AES.MODE_CFB,IV=iv)
+		encrypted_message = cipher.encrypt(message)   
+		return b64encode(iv + encrypted_message)
+
+	def decrypt(self, message):
+		message = b64decode(message)
+		iv = message[0:16]
+		message = message[16:]
+		cipher = AES.new(self.aes_key, AES.MODE_CFB, IV=iv)
+		return cipher.decrypt(message)
 
 	def handle_input(self):
 		while True:
