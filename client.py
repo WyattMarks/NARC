@@ -47,6 +47,7 @@ class Client:
 				if response == b'':
 					raise socket.error
 
+				
 				if response[0:10].decode() == "CHANNELKEY":
 					self.aes_key = self.decryptor.decrypt(response[10:])
 					self.channel_encrypted = True
@@ -62,28 +63,33 @@ class Client:
 
 				response = response.decode() if type(response) == bytes else response
 
-				if response.startswith(f"{self.nick} is now known as ") or response.startswith("Welcome back, "):
-					self.nick = response.strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
-					self.nick = self.nick[0:len(self.nick)-1]
-
-				if response.startswith("You are now known as "):
-					self.nick = response.strip().replace("You are now known as ", "")
-					self.nick = self.nick[0:len(self.nick)-1]
-					sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
-					print(f"<{self.nick}> ", end="")
-					sys.stdout.flush()
-					continue
-
-				if not response.strip().startswith(f"<{self.nick}> "):
-					if response.startswith("-----BEGIN PUBLIC KEY-----"):
+				if response.startswith("-----BEGIN PUBLIC KEY-----"):
 						self.encryptor = PKCS1_OAEP.new(RSA.importKey(response))
 						self.waiting_for_password = True
 						sys.stdout.write('\033[2K\033[1G')
 						print("Password: ", end="")
 						sys.stdout.flush()
-					elif response.startswith("PUBKEYREQ"):
-						self.socket.send(self.rsaKey.publickey().exportKey())
-					else:
+						continue
+
+				if response.startswith("PUBKEYREQ"):
+					self.socket.send(self.rsaKey.publickey().exportKey())
+					continue
+
+				for response in response.splitlines():
+					
+					if response.startswith(f"{self.nick} is now known as ") or response.startswith("Welcome back, "):
+						self.nick = response.strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
+						self.nick = self.nick[0:len(self.nick)-1]
+
+					if response.startswith("You are now known as "):
+						self.nick = response.strip().replace("You are now known as ", "")
+						self.nick = self.nick[0:len(self.nick)-1]
+						sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
+						print(f"<{self.nick}> ", end="")
+						sys.stdout.flush()
+						continue
+
+					if not response.strip().startswith(f"<{self.nick}> "):
 						sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
 						print(response.strip())
 						print(f"<{self.nick}> ", end="") #put the <user> back so it looks right

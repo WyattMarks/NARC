@@ -110,7 +110,7 @@ class Server:
 	## Broadcast the arrival of someone
 	def arrival(self, client, channel):
 		if channel is None:
-			client.send("Welcome to NARC Server 0.0.2!")
+			client.send(f"Welcome to NARC Server 0.0.2!\r\nThere are currently {len(self.clients)} people online!")
 			client.send(f"You are now known as {client.nick}.")
 
 		if channel is not None and channel in self.channels: #If there is a MOTD currently set, send it
