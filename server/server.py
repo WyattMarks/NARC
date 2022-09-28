@@ -147,16 +147,15 @@ class Server:
 			for client in self.clients:
 				if client.channel == channel:
 					if client.authed:
+						client.send("Encryption was enabled for this channel.")
 						client.request_pubkey()
 					else:
-						client.send("Sorry, this channel has been encrypted and now requires you to be registered.\r\n".encode())
+						client.send("Sorry, this channel has been encrypted and now requires you to be registered.")
 						client.channel = None
 			owner, motd, _e = self.channels[channel]
 			self.channels[channel] = (owner, motd, True)
 		else:
-			for client in self.clients:
-				if client.channel == channel:
-					client.send("The channels encryption requirement has been disabled.\r\n".encode())
+			self.broadcast(channel, "Encryption was disabled for this channel.")
 			owner, motd, _e = self.channels[channel]
 			self.channels[channel] = (owner, motd, False)
 		self.save_channels()
