@@ -117,15 +117,11 @@ class Server:
 			owner, motd, _e = self.channels[channel]
 			client.send(f"{motd}")
 
-		for c in self.clients:
-			if (c.channel != None and c.channel == channel): # Tell everyone that someone new connected
-				c.send(f"Welcome {client.nick} to {channel}!")
+		self.broadcast(channel, f"Welcome {client.nick} to {channel}!", exclude=[client])
 
 	## Broadcast the departure
 	def departure(self, client):
-		for c in self.clients:
-			if (c.channel != None and c.channel == client.channel and c != client): # Tell everyone that someone left
-				c.send(f"{client.nick} has left {client.channel}..")
+		self.broadcast(client.channel, f"{client.nick} has left {client.channel}..", exclude=[client])
 	
 	
 	def is_channel_claimed(self, channel):

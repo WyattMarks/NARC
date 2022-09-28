@@ -89,7 +89,7 @@ class Client:
 						sys.stdout.flush()
 						continue
 
-					if not response.strip().startswith(f"<{self.nick}> "):
+					if not response.strip().startswith(f"<{self.nick}> "): #The way input() works, we'll already see our chat messages. Therefore don't print them again
 						sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
 						print(response.strip())
 						print(f"<{self.nick}> ", end="") #put the <user> back so it looks right
