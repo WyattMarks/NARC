@@ -312,6 +312,7 @@ class Client:
 					state = "" if self.server.is_channel_encrypted(self.channel) else "not "
 					self.send(f"/encrypt <true/false>\r\nCurrently this channel is {state}encrypted.")
 			else:
-				self.send("You don't own this channel.")
+				state = "" if self.server.is_channel_encrypted(self.channel) else "not "
+				self.send(f"Currently this channel is {state}encrypted.")
 		else:
 			self.send("This channel isn't registered.")

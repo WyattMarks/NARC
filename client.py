@@ -126,8 +126,8 @@ class Client:
 						self.socket.send(password)
 						self.waiting_for_password = False
 					elif message.startswith("/"): #If it starts with / then it is a command, and we should not prepend /chat
-						if message.startswith("/channel #"):
-							self.channel = message.replace("/channel ", "")
+						if message.startswith("/join #"):
+							self.channel = message.replace("/join ", "")
 							self.channel_encrypted = False
 
 						self.send(f"{message} \r\n".encode())
