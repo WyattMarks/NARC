@@ -110,21 +110,22 @@ class Server:
 	## Broadcast the arrival of someone
 	def arrival(self, client, channel):
 		if channel is None:
-			client.send("Welcome to NARC Server 0.0.2!\r\n".encode())
+			client.send("Welcome to NARC Server 0.0.2!")
+			client.send(f"You are now known as {client.nick}.")
 
 		if channel is not None and channel in self.channels: #If there is a MOTD currently set, send it
 			owner, motd, _e = self.channels[channel]
-			client.send(f"{motd}\r\n".encode())
+			client.send(f"{motd}")
 
 		for c in self.clients:
 			if (c.channel != None and c.channel == channel): # Tell everyone that someone new connected
-				c.send(f"Welcome {client.nick} to {channel}!\r\n".encode())
+				c.send(f"Welcome {client.nick} to {channel}!")
 
 	## Broadcast the departure
 	def departure(self, client):
 		for c in self.clients:
 			if (c.channel != None and c.channel == client.channel and c != client): # Tell everyone that someone left
-				c.send(f"{client.nick} has left {client.channel}..\r\n".encode())
+				c.send(f"{client.nick} has left {client.channel}..")
 	
 	
 	def is_channel_claimed(self, channel):
@@ -185,7 +186,8 @@ class Server:
 
 	## Determine the availability of a nickname
 	def nick_available(self, nick):
-		
+		if nick == "Anonymous":
+			return False
 		for c in self.clients:
 			if c.nick == nick:
 				return False
@@ -213,7 +215,7 @@ class Server:
 		
 		self.passwords[client.nick] = (password, salt)
 		self.save_passwords()
-		client.send(f"Congratulations, {client.nick} is now registered to you.\r\n".encode())
+		client.send(f"Congratulations, {client.nick} is now registered to you.")
 
 	def auth(self, nick, password):
 		(hash, salt) = self.passwords[nick]

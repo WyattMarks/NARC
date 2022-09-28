@@ -51,6 +51,11 @@ class Client:
 	def begin(self):
 		self.connected = True
 
+		new_nick = self.nick
+		while not self.server.nick_available(new_nick):
+			new_nick = self.nick + str( int.from_bytes(Random.new().read(2), byteorder='big', signed=False) )
+		self.nick = new_nick
+
 		# Let the client know the connection was successful
 		self.server.arrival(self, None)
 

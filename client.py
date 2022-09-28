@@ -66,6 +66,14 @@ class Client:
 					self.nick = response.strip().replace(f"{self.nick} is now known as ", "").replace("Welcome back, ", "")
 					self.nick = self.nick[0:len(self.nick)-1]
 
+				if response.startswith("You are now known as "):
+					self.nick = response.strip().replace("You are now known as ", "")
+					self.nick = self.nick[0:len(self.nick)-1]
+					sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
+					print(f"<{self.nick}> ", end="")
+					sys.stdout.flush()
+					continue
+
 				if not response.strip().startswith(f"<{self.nick}> "):
 					if response.startswith("-----BEGIN PUBLIC KEY-----"):
 						self.encryptor = PKCS1_OAEP.new(RSA.importKey(response))
