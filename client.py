@@ -77,6 +77,7 @@ class Client:
 					cursor = 0
 				else:
 					sys.stdout.write(c)
+					sys.stdout.flush()
 				continue
 
 			if c == readchar.key.RIGHT:
@@ -86,6 +87,7 @@ class Client:
 					cursor = len(selected)
 				else:
 					sys.stdout.write(c)
+					sys.stdout.flush()
 				continue
 
 			if history_position != -1:
