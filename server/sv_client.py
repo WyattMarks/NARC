@@ -141,13 +141,15 @@ class Client:
 		if msg.startswith("#"): # Just like IRC, channels start with #
 			if self.server.is_channel_encrypted(msg):
 				if self.authed:
+					self.send(f"Joining {msg}...\r\nThis channel is encrypted with AES.")
 					if self.rsa_encryptor is None:
 						self.request_pubkey()
 				else:
 					self.send("You must be registered to join this channel because it is encrypted.")
 					return
+			else:
+				self.send(f"Joining {msg}...")
 
-			self.send(f"Joining {msg}...")
 			self.server.arrival(self, msg) # Tell anyone in the channel someone joined
 			self.server.departure(self) # Tell anyone in the old channel that someone left
 			self.channel = msg
@@ -156,19 +158,27 @@ class Client:
 		
 	## Broadcast a message to the channel the client is in
 	def send_chat(self, msg):
-		if self.channel != None:
-			self.server.broadcast(self.channel, f"<{self.nick}> {msg}") # Broadcast the chat message in this channel
-		else:
-			self.send("You must join a channel first (/join)")
+		if msg != "/chat":
+			if self.channel != None:
+				self.server.broadcast(self.channel, f"<{self.nick}> {msg}") # Broadcast the chat message in this channel
+			else:
+				self.send("You must join a channel first (/join)")
 
 	## Set the client's nick name
 	def set_nick(self, msg):
+		if self.server.is_channel_encrypted(self.channel):
+			self.send("You cannot switch names in an encrypted chat.")
+			return
+
 		if msg != "/nick":
 			if self.server.is_nick_registered(msg):
 				self.send(f"Sorry, {msg} is registered. If this is your nick, use /auth <nick> to login")
 				return
 
 			if self.server.nick_available(msg):
+				if self.authed:
+					self.send(f"You have been logged out, {self.nick}")
+					self.authed = False
 				self.authed = False
 				self.server.broadcast(self.channel, f"{self.nick} is now known as {msg}!")
 				self.nick = msg
@@ -257,7 +267,7 @@ class Client:
 
 
 		self.send(self.server.rsaKey.publickey().exportKey())
-		if self.server.auth(msg, self.server.decryptor.decrypt(self.socket.recv(4096).strip()) + self.server.get_salt(msg).encode()):
+		if self.server.auth(msg, self.server.decryptor.decrypt(self.socket.recv(4096).strip()).strip() + self.server.get_salt(msg).encode()):
 			self.nick = msg
 			self.send(f"Welcome back, {self.nick}!")
 			self.server.broadcast(self.channel, f"{self.nick} has logged in!\r\n", exclude=[self])
