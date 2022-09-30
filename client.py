@@ -39,11 +39,13 @@ class Client:
 		self.history = []
 
 		self.color_names = {"Anonymous": '[#000000]'}
-		
+		self.msg = ''
+		self.cursor = 0
+
 	def get_input(self, prefix=""):
 		sys.stdout.write(prefix)
 		cursor = 0
-		msg = ''
+		self.msg = ''
 		history_position = -1
 		c = ''
 		while c != readchar.key.ENTER:
@@ -53,7 +55,7 @@ class Client:
 				history_position += 1
 				if history_position < len(self.history):
 					self.print_prefix()
-					print(self.history[len(self.history) - history_position - 1], end='')
+					print("[white]" + self.history[len(self.history) - history_position - 1], end='')
 					cursor = len(self.history[len(self.history) - history_position - 1])
 				else:
 					history_position = len(self.history) - 1
@@ -63,12 +65,12 @@ class Client:
 				history_position -= 1
 				self.print_prefix()
 				if history_position > -1:
-					print(self.history[len(self.history) - history_position - 1], end='')
+					print("[white]" + self.history[len(self.history) - history_position - 1], end='')
 					cursor = len(self.history[len(self.history) - history_position - 1])
 				else:
 					history_position = -1
-					print(msg, end='')
-					cursor = len(msg)
+					print("[white]" + self.msg, end='')
+					cursor = len(self.msg)
 				continue
 
 			if c == readchar.key.LEFT:
@@ -82,7 +84,7 @@ class Client:
 
 			if c == readchar.key.RIGHT:
 				cursor += 1
-				selected = msg if history_position == -1 else self.history[len(self.history) - history_position - 1]
+				selected = self.msg if history_position == -1 else self.history[len(self.history) - history_position - 1]
 				if cursor > len(selected):
 					cursor = len(selected)
 				else:
@@ -91,7 +93,7 @@ class Client:
 				continue
 
 			if history_position != -1:
-				msg = self.history[len(self.history) - history_position - 1]
+				self.msg = self.history[len(self.history) - history_position - 1]
 				history_position = -1
 
 			if c == readchar.key.ENTER:
@@ -99,27 +101,28 @@ class Client:
 
 			if c == readchar.key.BACKSPACE:
 				if cursor > 0:
-					msg = msg[:cursor-1] + msg[cursor:]
+					self.msg = self.msg[:cursor-1] + self.msg[cursor:]
 					cursor -= 1
-					sys.stdout.write('\b \b' + msg[cursor:] + ' ')
-					for i in range(len(msg[cursor:]) + 1):
+					sys.stdout.write('\b \b' + self.msg[cursor:] + ' ')
+					for i in range(len(self.msg[cursor:]) + 1):
 						sys.stdout.write(readchar.key.LEFT)
 					sys.stdout.flush()
 				continue
 			elif self.waiting_for_password:
 				sys.stdout.write('*')
 			else:
-				sys.stdout.write(c + msg[cursor:])
-				for i in range(len(msg[cursor:])):
+				sys.stdout.write(c + self.msg[cursor:])
+				for i in range(len(self.msg[cursor:])):
 					sys.stdout.write(readchar.key.LEFT)
-			msg = msg[:cursor] + c + msg[cursor:]
+			self.msg = self.msg[:cursor] + c + self.msg[cursor:]
 			cursor += 1
+			self.cursor = cursor
 			sys.stdout.flush()
 
 		if not self.waiting_for_password:
-			self.history.append(msg)
+			self.history.append(self.msg)
 
-		return msg
+		return self.msg
 
 
 	def connect(self):
@@ -135,12 +138,16 @@ class Client:
 		sys.stdout.write('\033[2K\033[1G')
 		if self.channel is not None:
 			if self.channel_encrypted:
-				print(f"[[dodger_blue2]{self.channel}[white]]",end='')
+				print(f"[white][[dodger_blue2]{self.channel}[white]]",end='')
 				print(f" <{self.color_names[self.nick]}{self.nick}[white]>: ", end="")
 			else:
 				print(f"\[{self.channel}] <{self.color_names[self.nick]}{self.nick}[white]>: ", end="")
 		else:
 			print(f'<{self.color_names[self.nick]}{self.nick}[white]>: ', end='')
+
+		print(f"[white]{self.msg}", end='')
+		for i in range(len(self.msg[self.cursor:])):
+			sys.stdout.write(readchar.key.LEFT)
 
 	def print_responses(self):
 		import sys
@@ -204,7 +211,7 @@ class Client:
 					
 					sys.stdout.write('\033[2K\033[1G')
 					sys.stdout.flush()
-					print(time.strftime('[%H:%M:%S] ') + response)
+					print(time.strftime('[white][[green1]%H:%M:%S[white]] ') + response)
 				self.print_prefix()
 
 			except socket.error:
@@ -266,8 +273,8 @@ class Client:
 
 if __name__ == "__main__":
 	import sys
-
-	server = "localhost"
+	server = "wyattmarks.com"
+	#server = "localhost"
 	port = 0xBEEF
 	if len(sys.argv) >= 2:
 		server = sys.argv[1]
