@@ -28,6 +28,7 @@ class Client:
 		self.port = port
 
 		self.waiting_for_password = False
+		self.waiting_for_response = False
 
 		randomGenerator = Random.new().read
 		self.rsaKey = RSA.generate(1024, randomGenerator)
@@ -97,6 +98,7 @@ class Client:
 				history_position = -1
 
 			if c == readchar.key.ENTER:
+				sys.stdout.write('\033[1G\033[2K')
 				continue
 
 			if c == readchar.key.BACKSPACE:
@@ -122,7 +124,9 @@ class Client:
 		if not self.waiting_for_password:
 			self.history.append(self.msg)
 
-		return self.msg
+		message = self.msg
+		self.msg = ''
+		return message
 
 
 	def connect(self):
@@ -135,13 +139,15 @@ class Client:
 			self.color_names[nick] = f"[#{random.randrange(0x1000000):06x}]"
 
 	def print_prefix(self):
-		sys.stdout.write('\033[2K\033[1G')
+		if self.waiting_for_password:
+			return
+		sys.stdout.write('\033[1G\033[2K')
 		if self.channel is not None:
 			if self.channel_encrypted:
 				print(f"[white][[dodger_blue2]{self.channel}[white]]",end='')
 				print(f" <{self.color_names[self.nick]}{self.nick}[white]>: ", end="")
 			else:
-				print(f"\[{self.channel}] <{self.color_names[self.nick]}{self.nick}[white]>: ", end="")
+				print(f"[{self.channel}] <{self.color_names[self.nick]}{self.nick}[white]>: ", end="")
 		else:
 			print(f'<{self.color_names[self.nick]}{self.nick}[white]>: ', end='')
 
@@ -158,6 +164,7 @@ class Client:
 				if response == b'':
 					raise socket.error
 
+				self.waiting_for_response = False
 				
 				if response[0:10].decode() == "CHANNELKEY":
 					self.aes_key = self.decryptor.decrypt(response[10:])
@@ -177,7 +184,7 @@ class Client:
 				if response.startswith("-----BEGIN PUBLIC KEY-----"):
 						self.encryptor = PKCS1_OAEP.new(RSA.importKey(response))
 						self.waiting_for_password = True
-						sys.stdout.write('\033[2K\033[1G')
+						sys.stdout.write('\033[1G\033[2K')
 						print("Password: ", end="")
 						continue
 
@@ -209,13 +216,13 @@ class Client:
 						self.register_nick(response[1:response.find('>')])
 						response = "<" + self.color_names[response[1:response.find('>')]] + response[1:response.find('>')] +"[white]>" + response[response.find('>') + 1:]
 					
-					sys.stdout.write('\033[2K\033[1G')
-					sys.stdout.flush()
+					sys.stdout.write('\033[1G\033[2K')
 					print(time.strftime('[white][[green1]%H:%M:%S[white]] ') + response)
+					sys.stdout.flush()
 				self.print_prefix()
 
 			except socket.error:
-				sys.stdout.write('\033[2K\033[1G') #Get rid of the <user> in console from the input() call
+				sys.stdout.write('\033[1G\033[2K') #Get rid of the <user> in console from the input() call
 				print("Connection lost, attempting to reconnect..")
 				connected = False
 				while not connected:
@@ -249,11 +256,19 @@ class Client:
 		return cipher.decrypt(message)
 
 	def handle_input(self):
+		from time import sleep
+
 		while True:
 			try:
+				if self.waiting_for_response:
+					sleep(0.05)
+					continue
+			
 				self.print_prefix()
 				message = self.get_input()
 				if len(message) > 0:
+					self.waiting_for_response = True
+					sys.stdout.write('\033[1G\033[2K')
 					if self.waiting_for_password:
 						password = self.encryptor.encrypt(message.encode())
 						self.socket.send(password)
@@ -273,8 +288,8 @@ class Client:
 
 if __name__ == "__main__":
 	import sys
-	server = "wyattmarks.com"
-	#server = "localhost"
+	#server = "dedicated"
+	server = "localhost"
 	port = 0xBEEF
 	if len(sys.argv) >= 2:
 		server = sys.argv[1]
@@ -291,6 +306,6 @@ if __name__ == "__main__":
 		exit(0)
 
 	print_thread = threading.Thread(target=c.print_responses) #Put this in a thread so the socket.recv call doesn't block us from sending input
-	print_thread.setDaemon(True) #Make it a deamon so that the program doesn't hang around waiting for the thread
+	print_thread.daemon = True #Make it a deamon so that the program doesn't hang around waiting for the thread
 	print_thread.start()
 	c.handle_input()
