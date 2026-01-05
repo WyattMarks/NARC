@@ -163,6 +163,8 @@ class Client:
 				self.server.broadcast(self.channel, f"<{self.nick}> {msg}") # Broadcast the chat message in this channel
 			else:
 				self.send("You must join a channel first (/join)")
+		else:
+			self.send("You must provide a message to send after /chat")
 
 	## Set the client's nick name
 	def set_nick(self, msg):

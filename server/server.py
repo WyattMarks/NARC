@@ -18,6 +18,8 @@ from sv_client import Client
 host = ""
 port = 0xBEEF #48879
 
+version = "0.0.2"
+
 
 
 
@@ -95,7 +97,7 @@ class Server:
 		while True: # Main infinite loop. Spawns threads to handle each client, and that is it
 			client, address = self.socket.accept() # Wait for a connection
 			cli_thread = threading.Thread(target=self.handle_client, args=(client, address)) #Create a thread object to call handle_client
-			cli_thread.setDaemon(True) #Set to daemon so that the process doesn't wait for clients to disconnect if we stop
+			cli_thread.daemon = True #Set to daemon so that the process doesn't wait for clients to disconnect if we stop
 			cli_thread.start() #Call this client's thread
 
 	## Stop the server
@@ -110,7 +112,7 @@ class Server:
 	## Broadcast the arrival of someone
 	def arrival(self, client, channel):
 		if channel is None:
-			client.send(f"Welcome to NARC Server 0.0.2!\r\nThere are currently {len(self.clients)} people online!")
+			client.send(f"Welcome to NARC Server {version}!\r\nThere are currently {len(self.clients)} people online!")
 			client.send(f"You are now known as {client.nick}.")
 
 		if channel is not None and channel in self.channels: #If there is a MOTD currently set, send it
@@ -172,7 +174,14 @@ class Server:
 		self.save_channels()
 
 	def get_motd(self, channel):
+		if channel is None:
+			return f"Welcome to NARC Server {version}!"
+		fallback = "Welcome to " + channel
+		if channel is None or channel not in self.channels:
+			return fallback
 		owner, motd, _e = self.channels[channel]
+		if motd is None:
+			return fallback
 		return motd
 
 	## Remove a client
