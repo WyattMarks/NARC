@@ -1,0 +1,4 @@
+PyCryptoDome
+readchar
+rich
+argon2-cffi
